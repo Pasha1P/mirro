@@ -8,62 +8,54 @@
 from django.db import models
 
 
-class Acces(models.Model):
-    pk_acces = models.AutoField(primary_key=True)
-    fk_users = models.ForeignKey('Users', models.DO_NOTHING, db_column='fk_users')
-    fk_wall = models.ForeignKey('Wall', models.DO_NOTHING, db_column='fk_wall')
+class AccessToEdit(models.Model):
+    pk_access_to_edit = models.AutoField(primary_key=True)
+    fk_user = models.ForeignKey('User', models.DO_NOTHING, db_column='fk_user')
+    fk_board = models.ForeignKey('Board', models.DO_NOTHING, db_column='fk_board')
+    author = models.IntegerField()
 
     class Meta:
         managed = False
-        db_table = 'acces'
+        db_table = 'access_to_edit'
 
 
-class Elements(models.Model):
-    pk_element = models.AutoField(primary_key=True)
-    json = models.JSONField()
+class Board(models.Model):
+    pk_board = models.AutoField(primary_key=True)
+    total_likes = models.IntegerField()
+    title = models.CharField(max_length=100)
+    is_published = models.IntegerField()
+
+    class Meta:
+        managed = False
+        db_table = 'board'
+
+
+class Shape(models.Model):
+    pk_shape = models.AutoField(primary_key=True)
+    properties = models.JSONField()
     fk_type = models.ForeignKey('Type', models.DO_NOTHING, db_column='fk_type')
-    fk_wall = models.ForeignKey('Wall', models.DO_NOTHING, db_column='fk_wall')
+    fk_board = models.ForeignKey(Board, models.DO_NOTHING, db_column='fk_board')
 
     class Meta:
         managed = False
-        db_table = 'elements'
+        db_table = 'shape'
 
 
 class Type(models.Model):
     pk_type = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=45)
+    title = models.CharField(max_length=45)
 
     class Meta:
         managed = False
         db_table = 'type'
 
 
-class Users(models.Model):
-    pk_users = models.AutoField(primary_key=True)
-    email = models.CharField(unique=True, max_length=45)
-    name = models.CharField(max_length=45)
-    password = models.CharField(max_length=45)
+class User(models.Model):
+    pk_user = models.AutoField(primary_key=True)
+    email = models.CharField(max_length=100)
+    username = models.CharField(max_length=100)
+    password = models.CharField(max_length=255)
 
     class Meta:
         managed = False
-        db_table = 'users'
-
-
-class Vievs(models.Model):
-    pk_vievs = models.AutoField(primary_key=True)
-    like = models.CharField(max_length=1, blank=True, null=True)
-    fk_users = models.ForeignKey(Users, models.DO_NOTHING, db_column='fk_users')
-    fk_wall = models.ForeignKey('Wall', models.DO_NOTHING, db_column='fk_wall')
-
-    class Meta:
-        managed = False
-        db_table = 'vievs'
-
-
-class Wall(models.Model):
-    pk_wall = models.AutoField(primary_key=True)
-    name = models.TextField()
-
-    class Meta:
-        managed = False
-        db_table = 'wall'
+        db_table = 'user'
