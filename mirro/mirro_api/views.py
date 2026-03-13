@@ -1,13 +1,13 @@
 from django.contrib.auth.hashers import PBKDF2PasswordHasher
 from django.core.signing import TimestampSigner
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse, QueryDict
 from django.middleware.csrf import get_token
 from django.template.context_processors import request
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
-from mirro.mirro_api.models import User, Board, AccessToEdit
+from mirro_api.models import Like, Shape, User, Board, AccessToEdit
 
 
 def get_xcsrf(request):
@@ -161,7 +161,7 @@ def boards(request):
         if not title or title.strip() == '':
             return JsonResponse({'code': 422, 'message':'Поле не должен быть пустым'}, safe=False, status=422)
 
-        board = Board.object.create(
+        board = Board.objects.create(
             title = title,
             is_published = 0,
             total_like = 1,
@@ -183,7 +183,7 @@ def boards(request):
         if not user:
             return JsonResponse({'code': 401,'message': 'Пользователь не авторизирован'}, safe=False, status=401)
 
-        filter_param = request.POST.get('filter', 'published')
+        filter_param = request.GET.get('filter', 'published')
         accessed_ids = AccessToEdit.objects.filter(fk_user = user).values_list('fk_board', flat=True)
 
         if filter_param == 'all':
@@ -210,3 +210,90 @@ def boards(request):
             })
 
         return JsonResponse({'data':boards_list}, safe=False, status=200)
+    
+def board_id(request,id_board):
+    try: board=Board.objects.get(pk_board=id_board)
+    except Board.DoesNotExist: return JsonResponse({'code':'404','message':'ресурс не найден','data':board},safe=False,status=404)
+    
+    user=is_auth(request)
+    if user is None: return JsonResponse({'code': 401,'message': 'Пользователь не авторизирован'}, safe=False, status=401)
+    
+    is_owner = AccessToEdit.objects.filter(fk_board=board, fk_user=user,author=1)
+    if not is_owner.exists():  return JsonResponse({'code': 403,'message': 'недостаточно прав'}, safe=False, status=403)
+
+    if request.method in ['PUT', 'PATCH']:
+        put_data = QueryDict(request.body)
+        title = put_data.get('title')
+        published = int(put_data.get('published'))
+
+        mass={}
+        if title:
+            if not title.strip(): return JsonResponse({'code':'422','message':'проваленнв валидация данных','data':title},safe=False,status=422)
+            mass['title']=title
+        if published:
+            if published not in [1,0]: return JsonResponse({'code':'422','message':'проваленнв валидация данных','data':published},safe=False,status=422)
+            mass['title']=title
+        if not mass: return JsonResponse({'code': '400', 'message': 'нет данных для обновления'}, status=400)
+        Board.objects.filter(pk_board=id_board).update(**mass)
+        return JsonResponse({'code': '201', 'message': 'доска обновленна'}, status=201)
+    
+    if request.method == 'DELETE':
+        Shape.objects.filter(fk_board=board).delete()
+        Like.objects.filter(fk_board=board).delete()
+        AccessToEdit.objects.filter(fk_board=board).delete()
+        board.delete()
+        return JsonResponse({'code':200,'message':'доска удаленна'},safe=False,status=200)
+        
+def boards_id_accesses(request, id_board):
+    user=is_auth(request)
+    if user is None: return JsonResponse({'code': 401,'message': 'Пользователь не авторизирован'}, safe=False, status=401)
+    
+    try: board=Board.objects.get(pk_board=id_board)
+    except Board.DoesNotExist: return JsonResponse({'code':'404','message':'ресурс не найден'},safe=False,status=404)
+    
+    is_owner = AccessToEdit.objects.filter(fk_board=board, fk_user=user,author=1)
+    if not is_owner.exists():  return JsonResponse({'code': 403,'message': 'недостаточно прав'}, safe=False, status=403)
+
+    if request.method == 'GET':
+        acces = AccessToEdit.objects.filter(author=0,fk_board=board)
+        JsonResponse({'code':200,'message':'список соавторов','data':list(acces)},safe=False,status=200)
+        
+    if request.method == 'POST':
+        email =request.POST.get('target_email')
+        try: email_user = User.objects.get(email=email)
+        except User.DoesNotExist: return JsonResponse({'code':'404','message':'ресурс не найден'},safe=False,status=404)
+        access,created=AccessToEdit.objects.get_or_create(fk_user=email_user,fk_board=board,defaults={'author':0})
+        if created:return JsonResponse({'code':'201','message':'пользователь создан','data':access},safe=False,status=201)
+        else: return JsonResponse({'code':'422','message':'проваленна валидация данных'},safe=False,status=422)
+    
+    if request.method == 'DELETE':
+        email=request.get('target_email').strip()
+        if not email: return JsonResponse({'code':'422','message':'проваленна валидация данных'},safe=False,status=422)
+        try: email_user=User.objects.get(email=email)
+        except User.DoesNotExist:return JsonResponse({'code':'404','message':'ресурс не найден'},safe=False,status=404)
+        if user in email_user: return JsonResponse({'code':'403','message':'недостаточно прав'},safe=False,status=403)
+        deleted, _ = AccessToEdit.objects.filter(fk_user=email_user,fk_board=board,author=0).delete()
+        if deleted:return JsonResponse({'code': 200, 'message': 'ресурс удалён'},status=200)
+        return JsonResponse({'code': 404, 'message': 'ресурс не найден'},status=404)
+
+def boards_id_likes(request, id_board):
+    user=is_auth(request)
+    if user is None: return JsonResponse({'code': 401,'message': 'Пользователь не авторизирован'}, safe=False, status=401)
+    try: board=Board.objects.get(pk_board=id_board)
+    except Board.DoesNotExist: return JsonResponse({'code':'404','message':'ресурс не найден'},safe=False,status=404)
+
+    if request.method == 'GET':
+        is_owner = AccessToEdit.objects.filter(fk_board=board, fk_user=user,author=1)
+        if not is_owner.exists():  return JsonResponse({'code': 403,'message': 'недостаточно прав'}, safe=False, status=403)
+        return JsonResponse({'code':'201','message':'список лайкнувших','data':list(Like.objects.filter(fk_board=board).values())},safe=False,status=201)
+
+    if request.method == 'POST':
+        access,_=Like.objects.get_or_create(fk_user=user,fk_board=board)
+        if access:return JsonResponse({'code': 201, 'message': 'лайк поставлен'},status=201)
+        return JsonResponse({'code': 422, 'message': 'лайк уже стоит'},status=422)
+
+    if request.method == 'DELETE':
+        try: like=Like.objects.get(fk_user=user,fk_board=board)
+        except Like.DoesNotExist:return JsonResponse({'code':'404','message':'ресурс не найден'},safe=False,status=404)
+        like.delete()
+        return JsonResponse({'code': 200, 'message': 'ресурс удалён'},status=200)

@@ -18,6 +18,6 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
-    path('api',include('mirro_api/include')),
-    path('app',include('mirro_app/include')),
+    path('api/',include('mirro_api.urls')),
+    path('app/',include('mirro_app.urls')),
 ]

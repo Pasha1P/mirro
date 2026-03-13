@@ -71,6 +71,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'mirro.wsgi.application'
+ASGI_APPLICATION = 'mirro.asgi.application'
 
 
 # Database

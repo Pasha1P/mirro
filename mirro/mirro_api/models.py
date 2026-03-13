@@ -30,6 +30,16 @@ class Board(models.Model):
         db_table = 'board'
 
 
+class Like(models.Model):
+    pk_like = models.AutoField(primary_key=True)
+    fk_user = models.ForeignKey('User', models.DO_NOTHING, db_column='fk_user')
+    fk_board = models.ForeignKey(Board, models.DO_NOTHING, db_column='fk_board')
+
+    class Meta:
+        managed = False
+        db_table = 'like'
+
+
 class Shape(models.Model):
     pk_shape = models.AutoField(primary_key=True)
     properties = models.JSONField()
